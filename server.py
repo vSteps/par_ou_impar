@@ -1,83 +1,51 @@
 import socket
-import threading
 
-# Configurações de rede
-TCP_PORT = 12345
-UDP_PORT = 12346
-BUFFER_SIZE = 1024
+IP = "127.0.0.1"  # Altere para o IP da máquina do servidor
+UDP_PORT = 5005
+TCP_PORT = 5008
 
-# Tabuleiro do jogo da velha
-tabuleiro = [' ' for _ in range(9)]  # Lista com 9 espaços vazios
+# Cria socket TCP para enviar o resultado final para os clientes
+serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+serversocket.bind((IP, TCP_PORT))
+serversocket.listen(2)
+print("Servidor aguardando conexão...")
+(clientsocket1, address1) = serversocket.accept()
+print("Jogador 1 conectado:", address1)
+(clientsocket2, address2) = serversocket.accept()
+print("Jogador 2 conectado:", address2)
 
-# Função para verificar se alguém venceu
-def verificar_vencedor():
-    # Linhas
-    for i in range(0, 9, 3):
-        if tabuleiro[i] == tabuleiro[i+1] == tabuleiro[i+2] != ' ':
-            return tabuleiro[i]
-    # Colunas
-    for i in range(3):
-        if tabuleiro[i] == tabuleiro[i+3] == tabuleiro[i+6] != ' ':
-            return tabuleiro[i]
-    # Diagonais
-    if tabuleiro[0] == tabuleiro[4] == tabuleiro[8] != ' ':
-        return tabuleiro[0]
-    if tabuleiro[2] == tabuleiro[4] == tabuleiro[6] != ' ':
-        return tabuleiro[2]
-    return None
+# Cria socket UDP para receber as jogadas de ambos os jogadores
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.bind((IP, UDP_PORT))
 
-# Função para gerenciar a comunicação TCP com o jogador
-def handle_tcp_connection(client_socket, client_address):
-    print(f"Nova conexão TCP com {client_address}")
-    try:
-        while True:
-            # Receber movimento do cliente
-            data = client_socket.recv(BUFFER_SIZE)
-            if not data:
-                break
-            move = int(data.decode())  # Recebe a posição do movimento
-            if tabuleiro[move] == ' ':
-                tabuleiro[move] = 'X'  # Ou 'O' dependendo do jogador
-                client_socket.send(f"Movimento feito em {move}".encode())
-                vencedor = verificar_vencedor()
-                if vencedor:
-                    client_socket.send(f"{vencedor} venceu!".encode())
-                    break
-                else:
-                    # Alterna entre os jogadores
-                    pass
-            else:
-                client_socket.send("Posição já ocupada!".encode())
-    finally:
-        client_socket.close()
+# Recebe as jogadas de Jogador 1 e Jogador 2
+def recebe_jogada():
+    data, addr = sock.recvfrom(1024)
+    numero = int(data.decode())
+    data, addr = sock.recvfrom(1024)
+    escolha = data.decode().lower()
+    return numero, escolha, addr
 
-# Função para comunicação UDP (sinal rápido)
-def handle_udp_communication():
-    udp_server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_server.bind(('localhost', UDP_PORT))
-    while True:
-        data, addr = udp_server.recvfrom(BUFFER_SIZE)
-        print(f"Recebido do cliente UDP {addr}: {data.decode()}")
-        udp_server.sendto(f"Servidor UDP: {data.decode()}".encode(), addr)
+print("Aguardando as jogadas...")
+numero1, escolha1, addr1 = recebe_jogada()
+print(f"Jogador 1 escolheu: {numero1} e {escolha1}")
+numero2, escolha2, addr2 = recebe_jogada()
+print(f"Jogador 2 escolheu: {numero2} e {escolha2}")
 
-# Função principal do servidor
-def start_server():
-    # Configuração do servidor TCP
-    tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_server.bind(('localhost', TCP_PORT))
-    tcp_server.listen(2)  # Até dois jogadores
+# Soma dos números dos jogadores
+soma = numero1 + numero2
+resultado = "par" if soma % 2 == 0 else "ímpar"
 
-    print(f"Servidor TCP escutando na porta {TCP_PORT}")
+# Verifica se cada jogador acertou
+mensagem1 = "Você venceu!" if resultado == escolha1 else "Você perdeu!"
+mensagem2 = "Você venceu!" if resultado == escolha2 else "Você perdeu!"
 
-    # Criação da thread para UDP
-    udp_thread = threading.Thread(target=handle_udp_communication)
-    udp_thread.start()
+# Envia o resultado para ambos os jogadores via TCP
+clientsocket1.send(str.encode(mensagem1))
+clientsocket2.send(str.encode(mensagem2))
 
-    while True:
-        # Aguardar conexão dos jogadores via TCP
-        client_socket, client_address = tcp_server.accept()
-        tcp_thread = threading.Thread(target=handle_tcp_connection, args=(client_socket, client_address))
-        tcp_thread.start()
-
-if __name__ == "__main__":
-    start_server()
+# Fecha os sockets
+sock.close()
+clientsocket1.close()
+clientsocket2.close()
+serversocket.close()

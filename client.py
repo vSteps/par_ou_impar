@@ -1,85 +1,28 @@
 import socket
-import pygame
 
-# Configurações de rede
-TCP_PORT = 12345
-UDP_PORT = 12346
-BUFFER_SIZE = 1024
+IP = "127.0.0.1"  # Altere para o IP do servidor
+UDP_PORT = 5005
+TCP_PORT = 5008
 
-# Inicialização do Pygame
-pygame.init()
-LARGURA_TELA = 300
-ALTURA_TELA = 300
-TAMANHO_QUADRADO = 100
-COR_FUNDO = (255, 255, 255)
-COR_LINHA = (0, 0, 0)
-COR_X = (255, 0, 0)
-COR_O = (0, 0, 255)
+# Cria socket TCP para se conectar ao servidor e receber o resultado final
+socket_tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+socket_tcp.connect((IP, TCP_PORT))
 
-# Função para desenhar o tabuleiro
-def desenhar_tabuleiro(tela, tabuleiro):
-    for i in range(1, 3):
-        pygame.draw.line(tela, COR_LINHA, (i * TAMANHO_QUADRADO, 0), (i * TAMANHO_QUADRADO, ALTURA_TELA), 5)
-        pygame.draw.line(tela, COR_LINHA, (0, i * TAMANHO_QUADRADO), (LARGURA_TELA, i * TAMANHO_QUADRADO), 5)
-    
-    for i, valor in enumerate(tabuleiro):
-        x = (i % 3) * TAMANHO_QUADRADO + TAMANHO_QUADRADO // 2
-        y = (i // 3) * TAMANHO_QUADRADO + TAMANHO_QUADRADO // 2
-        if valor == 'X':
-            pygame.draw.line(tela, COR_X, (x - 30, y - 30), (x + 30, y + 30), 5)
-            pygame.draw.line(tela, COR_X, (x + 30, y - 30), (x - 30, y + 30), 5)
-        elif valor == 'O':
-            pygame.draw.circle(tela, COR_O, (x, y), 30, 5)
+# Cria socket UDP para enviar as jogadas ao servidor
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-# Função para enviar movimento ao servidor
-def enviar_movimento(cliente_tcp, movimento):
-    cliente_tcp.send(str(movimento).encode())
-    resposta = cliente_tcp.recv(BUFFER_SIZE).decode()
-    print(f"Resposta do servidor: {resposta}")
-    return resposta
+# Solicita ao jogador um número e a escolha de "par" ou "ímpar"
+numero = input("Escolha um número entre 0 e 10: ")
+escolha = input("Você escolhe Par ou Ímpar? ").lower()
 
-# Função para comunicação UDP
-def enviar_udp_signal(cliente_udp, sinal):
-    cliente_udp.sendto(sinal.encode(), ('localhost', UDP_PORT))
-    resposta, addr = cliente_udp.recvfrom(BUFFER_SIZE)
-    print(f"Resposta do servidor UDP: {resposta.decode()}")
+# Envia o número e a escolha para o servidor via UDP
+sock.sendto(numero.encode(), (IP, UDP_PORT))
+sock.sendto(escolha.encode(), (IP, UDP_PORT))
 
-# Função principal do cliente
-def iniciar_cliente():
-    cliente_tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    cliente_tcp.connect(('localhost', TCP_PORT))
-    
-    cliente_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# Recebe o resultado via TCP
+data = socket_tcp.recv(1024)
+print("Resultado:", data.decode('utf-8'))
 
-    tabuleiro = [' ' for _ in range(9)]
-    
-    tela = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA))
-    pygame.display.set_caption("Jogo da Velha")
-
-    rodando = True
-    turno = 'X'
-
-    while rodando:
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT:
-                rodando = False
-            elif evento.type == pygame.MOUSEBUTTONDOWN:
-                x, y = pygame.mouse.get_pos()
-                linha = x // TAMANHO_QUADRADO
-                coluna = y // TAMANHO_QUADRADO
-                movimento = linha + coluna * 3
-                if tabuleiro[movimento] == ' ':
-                    tabuleiro[movimento] = turno
-                    desenhar_tabuleiro(tela, tabuleiro)
-                    resposta = enviar_movimento(cliente_tcp, movimento)
-                    if 'venceu' in resposta:
-                        print(f"Jogador {turno} venceu!")
-                        rodando = False
-                    turno = 'O' if turno == 'X' else 'X'
-                    pygame.display.update()
-                    enviar_udp_signal(cliente_udp, "Pronto para jogar")
-
-    pygame.quit()
-
-if __name__ == "__main__":
-    iniciar_cliente()
+# Fecha os sockets
+sock.close()
+socket_tcp.close()
