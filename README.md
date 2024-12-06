@@ -14,7 +14,7 @@ Este é um jogo simples de Par ou Ímpar implementado em Python.
     ```
 2. Navegue até o diretório do jogo:
     ```bash
-    cd tic_tac_toe/par_ou_impar
+    cd par_ou_impar
     ```
 3. Execute o servidor:
     ```bash
